@@ -1,0 +1,25 @@
+name: Dashboard täglich aktualisieren
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # täglich 07:00 Uhr deutscher Zeit
+  workflow_dispatch:        # auch manuell startbar
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Feed aktualisieren
+        run: python scripts/update-feed.py
+
+      - name: Dashboard hochladen
+        run: python upload_to_github.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
