@@ -1,169 +1,348 @@
 # -*- coding: utf-8 -*-
 """
 scripts/update-feed.py
-Taeglich ausgefuehrt (GitHub Actions Cron oder lokal).
-Ruft RSS-Feeds ab und schreibt die Ergebnisse in dashboard.html.
+Taeglich per GitHub Actions: befuellt index.html mit aktuellen Meldungen.
+Quellen:  Morning Brief  → briefing-Feed
+          Wettbewerbsreport → radar-Feed
+          Stellenmarktreport (Google News, da Scraping in CI geblockt) → stellen-Feed
 """
 
-import sys
-import os
-import re
-import ssl
-import datetime
-import urllib.request
+import re, ssl, json, time, datetime as dt, urllib.request, urllib.error
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from urllib.parse import quote
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from brief_dashboard_snippet import update_dashboard
+# ── Pfade ────────────────────────────────────────────────────────────────────
+
+INDEX_PATH = Path(__file__).parent.parent / "index.html"
+
+_FEED_RE  = re.compile(
+    r"/\* ===== ASKLEPIOS-FEED:START.*?ASKLEPIOS-FEED:END ===== \*/", re.S)
+_CTRL_RE  = re.compile(r"[\x00-\x1f\x7f]")
+
+# ── SSL (GitHub Actions CA ist in Ordnung; corporate Proxy deaktiviert) ──────
 
 _SSL_CTX = ssl.create_default_context()
 _SSL_CTX.check_hostname = False
-_SSL_CTX.verify_mode = ssl.CERT_NONE
+_SSL_CTX.verify_mode    = ssl.CERT_NONE
 
-DASHBOARD_PATH = Path(__file__).parent.parent / "index.html"
+# ── Quellen: Briefing (aus Morning Brief/brief.py) ────────────────────────────
 
-# XML namespaces
-_NS_RSS1 = "http://purl.org/rss/1.0/"
-_NS_DC   = "http://purl.org/dc/elements/1.1/"
+BRIEFING_FEEDS = [
+    {"name": "medinfoweb",   "url": "https://medinfoweb.de/feed/"},
+    {"name": "GKV-Politik",  "url": "https://news.google.com/rss/search?q=Krankenhausreform+OR+GKV-Reform+OR+Stabilisierungsgesetz+OR+Bundesgesundheitsminister&hl=de&gl=DE&ceid=DE:de"},
+    {"name": "Klinikmarkt",  "url": "https://news.google.com/rss/search?q=Klinikinsolvenz+OR+Krankenhausschlie%C3%9Fung+OR+Krankenhausfinanzierung+OR+DRG&hl=de&gl=DE&ceid=DE:de"},
+    {"name": "Hamburg",      "url": "https://news.google.com/rss/search?q=Asklepios+OR+%22UKE+Hamburg%22+OR+%22Klinik+Hamburg%22&hl=de&gl=DE&ceid=DE:de"},
+]
+
+KATEGORIEN = [
+    {"label": "Aufmacher",                  "category": "Gesundheitspolitik",
+     "keywords": ["bundesrat", "bundestag", "gkv-reform", "krankenhausreform",
+                  "stabilisierungsgesetz", "spargesetz", "gmk", "ministerium"],
+     "exclude": ["geschäftsführer", "personalien", "wechsel"], "max": 1},
+    {"label": "Klinikmanagement & Strategie", "category": "Klinikmanagement & Strategie",
+     "keywords": ["klinik", "krankenhaus", "strategie", "qualität", "zertifizierung",
+                  "ambulant", "stationär", "versorgung", "kapazität", "personal"],
+     "exclude": ["geschäftsführer wechselt", "verlässt", "tritt zurück"], "max": 2},
+    {"label": "Gesundheitspolitik",         "category": "Gesundheitspolitik",
+     "keywords": ["gkv", "g-ba", "gesetz", "verordnung", "politik", "reform",
+                  "regulatorik", "koalition", "beitrag", "zulassung"],
+     "exclude": [], "max": 2},
+    {"label": "Finanzen & Erlöse",          "category": "Finanzen & Erlöse",
+     "keywords": ["vergütung", "drg", "budget", "finanzierung", "defizit", "erlös",
+                  "investition", "insolvenz", "casemix", "tarif", "kostensteigerung"],
+     "exclude": [], "max": 2},
+    {"label": "Hamburg & Asklepios",        "category": "Hamburg & Asklepios",
+     "keywords": ["hamburg", "asklepios", "uke", "schlotzhauer", "altona",
+                  "barmbek", "harburg", "st. georg", "gemmel"],
+     "exclude": [], "max": 2},
+]
+
+# ── Quellen: Radar (aus Wettbewerbsreport/brief.py) ───────────────────────────
+
+RADAR_SOURCES = [
+    {"name": "Universitätsklinikum Hamburg-Eppendorf", "category": "Universitätsklinikum", "relevance": "Hoch",
+     "gnews": "UKE Hamburg Eppendorf Klinik",
+     "match": ["uke", "eppendorf", "universitätsklinikum hamburg"]},
+    {"name": "Helios ENDO-Klinik / Mariahilf Hamburg", "category": "Privater Konzern", "relevance": "Hoch",
+     "gnews": "Helios Klinik Hamburg Mariahilf ENDO",
+     "match": ["helios", "endo-klinik", "endoklinik", "mariahilf"]},
+    {"name": "Albertinen Krankenhaus",                 "category": "Konfessionell",    "relevance": "Mittel",
+     "gnews": "Albertinen Krankenhaus Hamburg",
+     "match": ["albertinen"]},
+    {"name": "Katholisches Marienkrankenhaus",         "category": "Konfessionell",    "relevance": "Mittel",
+     "gnews": "Marienkrankenhaus Hamburg",
+     "match": ["marienkrankenhaus", "marien krankenhaus"]},
+    {"name": "Schön Klinik Hamburg Eilbek",            "category": "Privater Konzern", "relevance": "Mittel",
+     "gnews": "Schön Klinik Hamburg Eilbek",
+     "match": ["schön klinik", "schoen klinik", "eilbek"]},
+    {"name": "Agaplesion Diakonieklinikum Hamburg",    "category": "Konfessionell",    "relevance": "Mittel",
+     "gnews": "Agaplesion Diakonieklinikum Hamburg",
+     "match": ["agaplesion", "diakonieklinikum"]},
+]
+
+# ── Quellen: Stellen (Google News, da Stepstone/LinkedIn in CI geblockt) ──────
+
+STELLEN_QUERIES = [
+    ("Asklepios Chefarzt Hamburg",                ["asklepios"]),
+    ("Asklepios Geschäftsführer Krankenhaus",     ["asklepios"]),
+    ("Asklepios kaufmännisch Leiter Klinik",      ["asklepios"]),
+    ("Asklepios Verwaltungsleiter Klinikmanager", ["asklepios"]),
+]
+
+STELLEN_TITLE_SIGNALS = [
+    "chefarzt", "chefärztin", "geschäftsführer", "geschäftsführerin",
+    "verwaltungsleiter", "klinikmanager", "kaufmännisch", "personalleiter",
+    "medizinischer direktor", "leitender arzt",
+]
+
+# ── Hilfsfunktionen ───────────────────────────────────────────────────────────
+
+def _clean(text):
+    return _CTRL_RE.sub(" ", text or "").strip()
 
 
-def _fetch_rss(url, timeout=20):
-    """Fetches a feed URL and returns a list of raw dicts. Handles RSS 2.0, Atom, and RSS 1.0/RDF."""
+def _strip_html(text):
+    return re.sub(r"<[^>]+>", "", text or "").strip()[:300]
+
+
+def _gnews_url(query, days=7):
+    q = quote(f"{query} when:{days}d")
+    return f"https://news.google.com/rss/search?q={q}&hl=de&gl=DE&ceid=DE:de"
+
+
+def _fetch(url, timeout=20):
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "AsklepiosNewsroom/1.0"})
         with urllib.request.urlopen(req, context=_SSL_CTX, timeout=timeout) as resp:
-            data = resp.read()
-        root = ET.fromstring(data)
-        items = []
-
-        # RSS 1.0 / RDF
-        for item in root.findall(f"{{{_NS_RSS1}}}item"):
-            items.append({
-                "title":       (item.findtext(f"{{{_NS_RSS1}}}title") or "").strip(),
-                "link":        (item.findtext(f"{{{_NS_RSS1}}}link") or "").strip(),
-                "description": re.sub(r"<[^>]+>", "", item.findtext(f"{{{_NS_RSS1}}}description") or "").strip(),
-                "pubDate":     item.findtext(f"{{{_NS_DC}}}date") or item.findtext(f"{{{_NS_RSS1}}}pubDate") or "",
-            })
-
-        # RSS 2.0
-        for item in root.findall(".//item"):
-            items.append({
-                "title":       (item.findtext("title") or "").strip(),
-                "link":        (item.findtext("link") or "").strip(),
-                "description": re.sub(r"<[^>]+>", "", item.findtext("description") or "").strip(),
-                "pubDate":     item.findtext("pubDate") or "",
-            })
-
-        # Atom
-        for entry in root.findall(f".//{{{_NS_RSS1}}}entry"):
-            link_el = entry.find(f"{{{_NS_RSS1}}}link")
-            items.append({
-                "title":       (entry.findtext(f"{{{_NS_RSS1}}}title") or "").strip(),
-                "link":        link_el.get("href", "") if link_el is not None else "",
-                "description": re.sub(r"<[^>]+>", "", entry.findtext(f"{{{_NS_RSS1}}}summary") or "").strip(),
-                "pubDate":     entry.findtext(f"{{{_NS_RSS1}}}updated") or "",
-            })
-
-        # Deduplicate by link
-        seen = set()
-        unique = []
-        for it in items:
-            key = it.get("link") or it.get("title")
-            if key and key not in seen:
-                seen.add(key)
-                unique.append(it)
-        return unique
-
+            return resp.read()
     except Exception as e:
-        print(f"  Warnung: {url}: {e}", file=sys.stderr)
+        print(f"  Warnung: {url[:60]}: {e}", flush=True)
+        return None
+
+
+def _parse_feed(raw):
+    """Parst RSS 2.0, Atom und RSS 1.0/RDF. Gibt Liste von Dicts zurueck."""
+    if not raw:
         return []
+    try:
+        # XML-Deklaration mit korrekter Encoding-Angabe vorsetzen
+        if not raw.lstrip()[:5] in (b"<?xml", b"<rss ", b"<feed", b"<RDF:"):
+            raw = b'<?xml version="1.0" encoding="utf-8"?>' + raw
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        try:
+            root = ET.fromstring(raw.decode("utf-8", errors="replace").encode("utf-8"))
+        except ET.ParseError as e:
+            print(f"  XML-Fehler: {e}", flush=True)
+            return []
+
+    items = []
+    NS_RSS1 = "http://purl.org/rss/1.0/"
+    NS_DC   = "http://purl.org/dc/elements/1.1/"
+    NS_ATOM = "http://www.w3.org/2005/Atom"
+
+    def _tag(el):
+        return el.tag.split("}")[-1].lower()
+
+    for el in root.iter():
+        if _tag(el) not in ("item", "entry"):
+            continue
+        title = link = pub = desc = ""
+        for child in el:
+            t = _tag(child)
+            if t == "title":
+                title = (child.text or "").strip()
+            elif t == "link":
+                link = child.get("href") or child.text or ""
+                link = link.strip()
+            elif t in ("pubdate", "published", "updated", "date"):
+                pub = (child.text or "").strip()
+            elif t in ("description", "summary", "content"):
+                desc = (child.text or desc or "").strip()
+        if title:
+            items.append({"title": _strip_html(title), "link": link,
+                          "desc": _strip_html(desc), "pub": pub})
+    return items
 
 
 def _parse_date(s):
-    for fmt in (
-        "%a, %d %b %Y %H:%M:%S %z",
-        "%a, %d %b %Y %H:%M:%S %Z",
-        "%Y-%m-%dT%H:%M:%S%z",
-        "%Y-%m-%dT%H:%M:%SZ",
-        "%Y-%m-%dT%H:%M:%S",
-    ):
+    if not s:
+        return dt.datetime.now()
+    for fmt in ("%a, %d %b %Y %H:%M:%S %z", "%a, %d %b %Y %H:%M:%S %Z",
+                "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S"):
         try:
-            return datetime.datetime.strptime(s.strip(), fmt).strftime("%Y-%m-%dT%H:%M:%S")
+            return dt.datetime.strptime(s.strip(), fmt).replace(tzinfo=None)
         except (ValueError, AttributeError):
             continue
-    return datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    return dt.datetime.now()
 
 
-def _build_items(raw, feed, source, category, max_items=6, relevance=None):
+def _iso(d):
+    return d.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+# ── Dashboard schreiben (merge-faehig) ───────────────────────────────────────
+
+def update_dashboard(items, path=INDEX_PATH):
+    with open(path, "r", encoding="utf-8") as fh:
+        html = fh.read()
+    if not _FEED_RE.search(html):
+        raise RuntimeError(f"Feed-Platzhalter nicht gefunden in {path}")
+    # Bestehende Items anderer Feed-Typen behalten
+    existing = []
+    m = _FEED_RE.search(html)
+    if m:
+        blk = m.group(0)
+        s, e = blk.find("["), blk.rfind("]")
+        if s != -1 and e > s:
+            try:
+                existing = json.loads(blk[s:e+1])
+            except Exception:
+                existing = []
+    new_feeds = {it["feed"] for it in items}
+    merged = [it for it in existing
+              if isinstance(it, dict) and it.get("feed") not in new_feeds] + items
+    payload = json.dumps(merged, ensure_ascii=False)
+    new_block = (
+        "/* ===== ASKLEPIOS-FEED:START - taeglich von brief.py ersetzt ===== */\n"
+        "  window.__ASK_FEED__ = " + payload + ";\n"
+        "  /* ===== ASKLEPIOS-FEED:END ===== */"
+    )
+    html = _FEED_RE.sub(lambda _: new_block, html, count=1)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(html)
+
+
+# ── Briefing ──────────────────────────────────────────────────────────────────
+
+def get_briefing():
+    raw_articles = []
+    for feed in BRIEFING_FEEDS:
+        data = _fetch(feed["url"])
+        for item in _parse_feed(data)[:8]:
+            text = (item["title"] + " " + item["desc"]).lower()
+            raw_articles.append({
+                "source": feed["name"],
+                "title":  item["title"],
+                "link":   item["link"],
+                "desc":   item["desc"],
+                "text":   text,
+                "date":   _parse_date(item["pub"]),
+            })
+
     result = []
-    for entry in raw[:max_items]:
-        if not entry.get("title"):
-            continue
-        item = {
-            "feed":     feed,
-            "source":   source,
-            "category": category,
-            "title":    entry["title"],
-            "url":      entry["link"],
-            "summary":  entry["description"][:280] if entry["description"] else "",
-            "date":     _parse_date(entry["pubDate"]),
-        }
-        if relevance:
-            item["relevance"] = relevance
-        result.append(item)
+    used = set()
+    for kat in KATEGORIEN:
+        count = 0
+        for a in raw_articles:
+            if id(a) in used:
+                continue
+            has_kw = any(kw in a["text"] for kw in kat["keywords"])
+            has_ex = any(ex in a["text"] for ex in kat["exclude"])
+            if has_kw and not has_ex:
+                result.append({
+                    "feed":     "briefing",
+                    "source":   _clean(a["source"]),
+                    "category": kat["category"],
+                    "title":    _clean(a["title"]),
+                    "url":      a["link"],
+                    "summary":  _clean(a["desc"]),
+                    "date":     _iso(a["date"]),
+                })
+                used.add(id(a))
+                count += 1
+                if count >= kat["max"]:
+                    break
     return result
 
 
-def get_briefing():
-    items = []
-    for url, source, cat in [
-        ("https://medinfoweb.de/feed/",  "medinfoweb.de", "Gesundheitspolitik"),
-        ("https://bibliomed.de/feed/",   "bibliomed.de",  "Klinikmanagement & Strategie"),
-    ]:
-        raw = _fetch_rss(url)
-        items += _build_items(raw, "briefing", source, cat, max_items=8)
-    return items
-
-
-def get_stellen():
-    items = []
-    for url, source in [
-        ("https://karriere.asklepios.com/stellenangebote.rss", "karriere.asklepios.com"),
-        ("https://www.stepstone.de/rss/jobs/?what=Asklepios",  "stepstone.de"),
-    ]:
-        raw = _fetch_rss(url)
-        items += _build_items(raw, "stellen", source, "Stellenmarkt", max_items=10)
-    return items
-
+# ── Radar ─────────────────────────────────────────────────────────────────────
 
 def get_radar():
-    items = []
-    for url, source, relevance in [
-        ("https://www.ndr.de/nachrichten/hamburg/index~rdf.xml", "NDR.de", "Mittel"),
-    ]:
-        raw = _fetch_rss(url)
-        items += _build_items(raw, "radar", source, "Wettbewerber", max_items=6, relevance=relevance)
-    return items
+    result = []
+    for src in RADAR_SOURCES:
+        url  = _gnews_url(src["gnews"])
+        data = _fetch(url)
+        items = _parse_feed(data)
+        time.sleep(1.0)
+        count = 0
+        for item in items:
+            title = item["title"]
+            # Google-News-Titel "Schlagzeile - Quelle" → Quelle abschneiden
+            if " - " in title:
+                title = title.rsplit(" - ", 1)[0].strip()
+            if not title:
+                continue
+            d = _parse_date(item["pub"])
+            result.append({
+                "feed":      "radar",
+                "source":    src["name"],
+                "category":  src["category"],
+                "title":     _clean(title),
+                "url":       item["link"],
+                "summary":   _clean(item["desc"]),
+                "date":      _iso(d),
+                "relevance": src["relevance"],
+            })
+            count += 1
+            if count >= 3:
+                break
+    return result
 
+
+# ── Stellen ───────────────────────────────────────────────────────────────────
+
+def get_stellen():
+    result = []
+    seen = set()
+    for query, must_contain in STELLEN_QUERIES:
+        url  = _gnews_url(query, days=8)
+        data = _fetch(url)
+        items = _parse_feed(data)
+        time.sleep(1.0)
+        for item in items:
+            haystack = (item["title"] + " " + item["desc"]).lower()
+            if must_contain and not any(k in haystack for k in must_contain):
+                continue
+            key = item["title"].lower()[:60]
+            if key in seen:
+                continue
+            seen.add(key)
+            title = item["title"]
+            if " - " in title:
+                title = title.rsplit(" - ", 1)[0].strip()
+            result.append({
+                "feed":     "stellen",
+                "source":   "Asklepios",
+                "category": "Stellenmarkt",
+                "title":    _clean(title),
+                "url":      item["link"],
+                "summary":  _clean(item["desc"]),
+                "date":     _iso(_parse_date(item["pub"])),
+            })
+    return result
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("Morning Briefing ...")
+    print("Morning Briefing ...", flush=True)
     briefing = get_briefing()
-    print(f"  {len(briefing)} Meldungen")
+    print(f"  {len(briefing)} Meldungen", flush=True)
 
-    print("Stellenreport ...")
-    stellen = get_stellen()
-    print(f"  {len(stellen)} Meldungen")
-
-    print("Wettbewerbs-Radar ...")
+    print("Wettbewerbs-Radar ...", flush=True)
     radar = get_radar()
-    print(f"  {len(radar)} Meldungen")
+    print(f"  {len(radar)} Meldungen", flush=True)
 
-    all_items = briefing + stellen + radar
+    print("Stellenmarkt ...", flush=True)
+    stellen = get_stellen()
+    print(f"  {len(stellen)} Meldungen", flush=True)
+
+    all_items = briefing + radar + stellen
     if not all_items:
-        print("WARNUNG: Keine Meldungen abgerufen – Dashboard bleibt unveraendert.", file=sys.stderr)
-        sys.exit(1)
+        print("WARNUNG: Keine Meldungen – index.html bleibt unveraendert.")
+        raise SystemExit(1)
 
-    update_dashboard(all_items, str(DASHBOARD_PATH))
-    print(f"dashboard.html aktualisiert: {len(all_items)} Meldungen gesamt.")
+    update_dashboard(all_items, INDEX_PATH)
+    print(f"index.html aktualisiert: {len(all_items)} Meldungen gesamt.", flush=True)
