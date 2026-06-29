@@ -62,38 +62,17 @@ KATEGORIEN = [
 
 RADAR_SOURCES = [
     {"name": "Universitätsklinikum Hamburg-Eppendorf", "category": "Universitätsklinikum", "relevance": "Hoch",
-     "gnews": "UKE Hamburg Eppendorf Klinik",
-     "match": ["uke", "eppendorf", "universitätsklinikum hamburg"]},
+     "gnews": '"UKE Hamburg" OR "Universitätsklinikum Hamburg-Eppendorf"'},
     {"name": "Helios ENDO-Klinik / Mariahilf Hamburg", "category": "Privater Konzern", "relevance": "Hoch",
-     "gnews": "Helios Klinik Hamburg Mariahilf ENDO",
-     "match": ["helios", "endo-klinik", "endoklinik", "mariahilf"]},
+     "gnews": '"Helios" "Hamburg" Klinik'},
     {"name": "Albertinen Krankenhaus",                 "category": "Konfessionell",    "relevance": "Mittel",
-     "gnews": "Albertinen Krankenhaus Hamburg",
-     "match": ["albertinen"]},
+     "gnews": '"Albertinen" Hamburg Krankenhaus'},
     {"name": "Katholisches Marienkrankenhaus",         "category": "Konfessionell",    "relevance": "Mittel",
-     "gnews": "Marienkrankenhaus Hamburg",
-     "match": ["marienkrankenhaus", "marien krankenhaus"]},
+     "gnews": '"Marienkrankenhaus Hamburg"'},
     {"name": "Schön Klinik Hamburg Eilbek",            "category": "Privater Konzern", "relevance": "Mittel",
-     "gnews": "Schön Klinik Hamburg Eilbek",
-     "match": ["schön klinik", "schoen klinik", "eilbek"]},
+     "gnews": '"Schön Klinik" Hamburg OR "Eilbek"'},
     {"name": "Agaplesion Diakonieklinikum Hamburg",    "category": "Konfessionell",    "relevance": "Mittel",
-     "gnews": "Agaplesion Diakonieklinikum Hamburg",
-     "match": ["agaplesion", "diakonieklinikum"]},
-]
-
-# ── Quellen: Stellen (Google News, da Stepstone/LinkedIn in CI geblockt) ──────
-
-STELLEN_QUERIES = [
-    ("Asklepios Chefarzt Hamburg",                ["asklepios"]),
-    ("Asklepios Geschäftsführer Krankenhaus",     ["asklepios"]),
-    ("Asklepios kaufmännisch Leiter Klinik",      ["asklepios"]),
-    ("Asklepios Verwaltungsleiter Klinikmanager", ["asklepios"]),
-]
-
-STELLEN_TITLE_SIGNALS = [
-    "chefarzt", "chefärztin", "geschäftsführer", "geschäftsführerin",
-    "verwaltungsleiter", "klinikmanager", "kaufmännisch", "personalleiter",
-    "medizinischer direktor", "leitender arzt",
+     "gnews": '"Agaplesion" Hamburg OR "Diakonieklinikum Hamburg"'},
 ]
 
 # ── Hilfsfunktionen ───────────────────────────────────────────────────────────
@@ -260,21 +239,23 @@ def get_briefing():
 # ── Radar ─────────────────────────────────────────────────────────────────────
 
 def get_radar():
+    """
+    Quoted-term-Suche in Google News stellt sicher, dass nur Artikel mit dem
+    Krankenhausnamen zurueckkommen. Kein sekundaerer Keyword-Filter noetig.
+    """
     result = []
     for src in RADAR_SOURCES:
-        url  = _gnews_url(src["gnews"])
-        data = _fetch(url)
+        url   = _gnews_url(src["gnews"])
+        data  = _fetch(url)
         items = _parse_feed(data)
         time.sleep(1.0)
         count = 0
         for item in items:
             title = item["title"]
-            # Google-News-Titel "Schlagzeile - Quelle" → Quelle abschneiden
             if " - " in title:
                 title = title.rsplit(" - ", 1)[0].strip()
             if not title:
                 continue
-            d = _parse_date(item["pub"])
             result.append({
                 "feed":      "radar",
                 "source":    src["name"],
@@ -282,45 +263,12 @@ def get_radar():
                 "title":     _clean(title),
                 "url":       item["link"],
                 "summary":   _clean(item["desc"]),
-                "date":      _iso(d),
+                "date":      _iso(_parse_date(item["pub"])),
                 "relevance": src["relevance"],
             })
             count += 1
             if count >= 3:
                 break
-    return result
-
-
-# ── Stellen ───────────────────────────────────────────────────────────────────
-
-def get_stellen():
-    result = []
-    seen = set()
-    for query, must_contain in STELLEN_QUERIES:
-        url  = _gnews_url(query, days=8)
-        data = _fetch(url)
-        items = _parse_feed(data)
-        time.sleep(1.0)
-        for item in items:
-            haystack = (item["title"] + " " + item["desc"]).lower()
-            if must_contain and not any(k in haystack for k in must_contain):
-                continue
-            key = item["title"].lower()[:60]
-            if key in seen:
-                continue
-            seen.add(key)
-            title = item["title"]
-            if " - " in title:
-                title = title.rsplit(" - ", 1)[0].strip()
-            result.append({
-                "feed":     "stellen",
-                "source":   "Asklepios",
-                "category": "Stellenmarkt",
-                "title":    _clean(title),
-                "url":      item["link"],
-                "summary":  _clean(item["desc"]),
-                "date":     _iso(_parse_date(item["pub"])),
-            })
     return result
 
 
@@ -335,11 +283,11 @@ if __name__ == "__main__":
     radar = get_radar()
     print(f"  {len(radar)} Meldungen", flush=True)
 
-    print("Stellenmarkt ...", flush=True)
-    stellen = get_stellen()
-    print(f"  {len(stellen)} Meldungen", flush=True)
+    # Stellen kommen vom lokalen scraper.py (Stellenmarktreport) per upload_to_github.py
+    # und werden hier nicht ueberschrieben (Merge-Logik in update_dashboard behaelt
+    # bestehende "stellen"-Eintraege solange dieser Lauf keine liefert).
 
-    all_items = briefing + radar + stellen
+    all_items = briefing + radar
     if not all_items:
         print("WARNUNG: Keine Meldungen – index.html bleibt unveraendert.")
         raise SystemExit(1)
