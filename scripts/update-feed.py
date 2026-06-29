@@ -21,7 +21,7 @@ _SSL_CTX = ssl.create_default_context()
 _SSL_CTX.check_hostname = False
 _SSL_CTX.verify_mode = ssl.CERT_NONE
 
-DASHBOARD_PATH = Path(__file__).parent.parent / "dashboard.html"
+DASHBOARD_PATH = Path(__file__).parent.parent / "index.html"
 
 # XML namespaces
 _NS_RSS1 = "http://purl.org/rss/1.0/"
