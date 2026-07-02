@@ -22,15 +22,15 @@ def _load_env():
 _load_env()
 
 OWNER = "jannalea"
-REPO  = "Asklepios-Newsroom"
+REPO  = "AsklepiosNewsroom"
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 def upload():
-    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.html")
+    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
     with open(html_path, "rb") as f:
         content = base64.b64encode(f.read()).decode()
 
-    api_url = f"https://api.github.com/repos/{OWNER}/{REPO}/contents/dashboard.html"
+    api_url = f"https://api.github.com/repos/{OWNER}/{REPO}/contents/index.html"
     headers = {
         "Authorization": f"token {TOKEN}",
         "Accept": "application/vnd.github.v3+json",
@@ -60,7 +60,7 @@ def upload():
             "github.com", "jannalea.github.io"
         ).replace(f"/blob/main", "").replace(f"{REPO}/", f"{REPO}/")
         # GitHub Pages URL ableiten
-        pages_url = f"https://{OWNER}.github.io/{REPO}/dashboard.html"
+        pages_url = f"https://{OWNER}.github.io/{REPO}/"
         print(f"Hochgeladen. Erreichbar unter: {pages_url}")
 
 if __name__ == "__main__":
