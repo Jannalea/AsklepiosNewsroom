@@ -58,22 +58,154 @@ KATEGORIEN = [
      "exclude": [], "max": 2},
 ]
 
-# ── Quellen: Radar (aus Wettbewerbsreport/brief.py) ───────────────────────────
+# ── Quellen: Radar – pro Bundesland / Region ─────────────────────────────────
 
-RADAR_SOURCES = [
-    {"name": "Universitätsklinikum Hamburg-Eppendorf", "category": "Universitätsklinikum", "relevance": "Hoch",
-     "gnews": '"UKE Hamburg" OR "Universitätsklinikum Hamburg-Eppendorf"'},
-    {"name": "Helios ENDO-Klinik / Mariahilf Hamburg", "category": "Privater Konzern", "relevance": "Hoch",
-     "gnews": '"Helios" "Hamburg" Klinik'},
-    {"name": "Albertinen Krankenhaus",                 "category": "Konfessionell",    "relevance": "Mittel",
-     "gnews": '"Albertinen" Hamburg Krankenhaus'},
-    {"name": "Katholisches Marienkrankenhaus",         "category": "Konfessionell",    "relevance": "Mittel",
-     "gnews": '"Marienkrankenhaus Hamburg"'},
-    {"name": "Schön Klinik Hamburg Eilbek",            "category": "Privater Konzern", "relevance": "Mittel",
-     "gnews": '"Schön Klinik" Hamburg OR "Eilbek"'},
-    {"name": "Agaplesion Diakonieklinikum Hamburg",    "category": "Konfessionell",    "relevance": "Mittel",
-     "gnews": '"Agaplesion" Hamburg OR "Diakonieklinikum Hamburg"'},
-]
+RADAR_SOURCES_BY_REGION = {
+    "hamburg": [
+        {"name": "Universitätsklinikum Hamburg-Eppendorf", "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"UKE Hamburg" OR "Universitätsklinikum Hamburg-Eppendorf"'},
+        {"name": "Helios ENDO-Klinik / Mariahilf Hamburg", "category": "Privater Konzern", "relevance": "Hoch",
+         "gnews": '"Helios" "Hamburg" Klinik'},
+        {"name": "Albertinen Krankenhaus",                 "category": "Konfessionell",    "relevance": "Mittel",
+         "gnews": '"Albertinen" Hamburg Krankenhaus'},
+        {"name": "Katholisches Marienkrankenhaus",         "category": "Konfessionell",    "relevance": "Mittel",
+         "gnews": '"Marienkrankenhaus Hamburg"'},
+        {"name": "Schön Klinik Hamburg Eilbek",            "category": "Privater Konzern", "relevance": "Mittel",
+         "gnews": '"Schön Klinik" Hamburg OR "Eilbek"'},
+        {"name": "Agaplesion Diakonieklinikum Hamburg",    "category": "Konfessionell",    "relevance": "Mittel",
+         "gnews": '"Agaplesion" Hamburg OR "Diakonieklinikum Hamburg"'},
+    ],
+    "schleswig_holstein": [
+        {"name": "UKSH Kiel / Lübeck",           "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"UKSH" OR "Universitätsklinikum Schleswig-Holstein"'},
+        {"name": "Schön Klinik Bad Bramstedt",   "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Schön Klinik" "Bad Bramstedt" OR "Schön Klinik" "Rendsburg"'},
+        {"name": "Helios Klinikum Schleswig",    "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Helios Klinikum Schleswig" OR "Helios" "Schleswig" Krankenhaus'},
+        {"name": "Sana Kliniken Lübeck",         "category": "Kommunal/Freigemeinnützig", "relevance": "Mittel",
+         "gnews": '"Sana Kliniken" Lübeck OR "Sana" Schleswig-Holstein Krankenhaus'},
+    ],
+    "mecklenburg_vorpommern": [
+        {"name": "Universitätsmedizin Greifswald", "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsmedizin Greifswald" OR "UMG Greifswald"'},
+        {"name": "Universitätsmedizin Rostock",    "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsmedizin Rostock" OR "UMR Rostock"'},
+        {"name": "Helios Kliniken Schwerin",       "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Helios" Schwerin Klinik OR "Helios Kliniken Schwerin"'},
+        {"name": "Dietrich-Bonhoeffer-Klinikum Neubrandenburg", "category": "Kommunal/Freigemeinnützig", "relevance": "Niedrig",
+         "gnews": '"Dietrich-Bonhoeffer-Klinikum" OR "DBK Neubrandenburg"'},
+    ],
+    "berlin_brandenburg": [
+        {"name": "Charité Berlin",               "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Charité" Berlin Krankenhaus OR Klinik'},
+        {"name": "Vivantes Berlin",              "category": "Kommunal/Freigemeinnützig", "relevance": "Hoch",
+         "gnews": '"Vivantes" Berlin OR "Vivantes Netzwerk"'},
+        {"name": "Helios Klinikum Berlin-Buch",  "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Helios" Berlin Klinikum OR "Berlin-Buch" Krankenhaus'},
+        {"name": "DRK Kliniken Berlin",          "category": "Konfessionell",        "relevance": "Mittel",
+         "gnews": '"DRK Kliniken Berlin" OR "DRK" Berlin Krankenhaus'},
+        {"name": "Ernst von Bergmann Potsdam",   "category": "Kommunal/Freigemeinnützig", "relevance": "Niedrig",
+         "gnews": '"Ernst von Bergmann" Potsdam OR "Klinikum Potsdam"'},
+    ],
+    "niedersachsen_bremen": [
+        {"name": "MHH Hannover",                 "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Medizinische Hochschule Hannover" OR "MHH Hannover"'},
+        {"name": "Klinikum Bremen-Mitte",        "category": "Kommunal/Freigemeinnützig", "relevance": "Hoch",
+         "gnews": '"Klinikum Bremen-Mitte" OR "Klinikverbund Bremen" Krankenhaus'},
+        {"name": "Helios Klinikum Hildesheim",   "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Helios Klinikum Hildesheim" OR "Helios" Hildesheim Krankenhaus'},
+        {"name": "Klinikum Region Hannover",     "category": "Kommunal/Freigemeinnützig", "relevance": "Mittel",
+         "gnews": '"Klinikum Region Hannover" OR "KRH Hannover"'},
+    ],
+    "nrw": [
+        {"name": "Uniklinik Köln",               "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Köln" OR "Uniklinik Köln"'},
+        {"name": "Universitätsklinikum Düsseldorf", "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Düsseldorf" OR "UKD Düsseldorf"'},
+        {"name": "UK Essen",                     "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Essen" OR "UK Essen"'},
+        {"name": "Helios Klinikum Duisburg",     "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Helios" Duisburg Klinikum OR "Helios Klinikum Duisburg"'},
+        {"name": "St. Franziskus Hospital Münster", "category": "Konfessionell",     "relevance": "Mittel",
+         "gnews": '"St. Franziskus-Hospital Münster" OR "Franziskus" Münster Krankenhaus'},
+    ],
+    "hessen": [
+        {"name": "Universitätsklinikum Frankfurt", "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Frankfurt" OR "Uniklinik Frankfurt"'},
+        {"name": "UKGM Gießen / Marburg",        "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"UKGM" OR "Universitätsklinikum Gießen" OR "Universitätsklinikum Marburg"'},
+        {"name": "Helios HSK Wiesbaden",         "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Helios HSK" OR "Helios Dr. Horst Schmidt Kliniken" Wiesbaden'},
+        {"name": "Agaplesion Markus Krankenhaus Frankfurt", "category": "Konfessionell", "relevance": "Mittel",
+         "gnews": '"Agaplesion Markus Krankenhaus" OR "Agaplesion" Frankfurt Krankenhaus'},
+    ],
+    "rheinland_pfalz": [
+        {"name": "Universitätsmedizin Mainz",    "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsmedizin Mainz" OR "Uniklinikum Mainz"'},
+        {"name": "Gemeinschaftsklinikum Mittelrhein", "category": "Kommunal/Freigemeinnützig", "relevance": "Mittel",
+         "gnews": '"Gemeinschaftsklinikum Mittelrhein" OR "GKM" Koblenz Krankenhaus'},
+        {"name": "Marienhaus Kliniken",          "category": "Konfessionell",        "relevance": "Mittel",
+         "gnews": '"Marienhaus Kliniken" OR "Marienhaus" Rheinland-Pfalz Krankenhaus'},
+    ],
+    "saarland": [
+        {"name": "Universitätsklinikum des Saarlandes", "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum des Saarlandes" OR "UKS Homburg"'},
+        {"name": "SHG-Kliniken Saarland",        "category": "Kommunal/Freigemeinnützig", "relevance": "Mittel",
+         "gnews": '"SHG-Kliniken" OR "SHG Saarland" Krankenhaus'},
+        {"name": "CaritasKlinikum Saarbrücken",  "category": "Konfessionell",        "relevance": "Mittel",
+         "gnews": '"CaritasKlinikum Saarbrücken" OR "Caritasklinikum Saarbrücken"'},
+    ],
+    "sachsen": [
+        {"name": "Universitätsklinikum Dresden", "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Dresden" OR "UKD Dresden"'},
+        {"name": "Universitätsklinikum Leipzig", "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Leipzig" OR "UKL Leipzig"'},
+        {"name": "Helios Park-Klinikum Leipzig", "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Helios Park-Klinikum" OR "Helios" Leipzig Klinikum'},
+        {"name": "Klinikum St. Georg Leipzig",   "category": "Kommunal/Freigemeinnützig", "relevance": "Mittel",
+         "gnews": '"Klinikum St. Georg" Leipzig OR "St. Georg" Leipzig Krankenhaus'},
+    ],
+    "sachsen_anhalt": [
+        {"name": "Universitätsklinikum Halle",   "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Halle" OR "UKH Halle"'},
+        {"name": "Universitätsmedizin Magdeburg","category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsmedizin Magdeburg" OR "UKMD Magdeburg"'},
+        {"name": "AMEOS Kliniken Sachsen-Anhalt","category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"AMEOS" Sachsen-Anhalt OR "AMEOS Kliniken" Krankenhaus'},
+    ],
+    "thueringen": [
+        {"name": "Universitätsklinikum Jena",    "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Jena" OR "UKJ Jena"'},
+        {"name": "SRH Wald-Klinikum Gera",       "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"SRH Wald-Klinikum Gera" OR "SRH" Gera Krankenhaus'},
+        {"name": "Zentralklinik Bad Berka",      "category": "Kommunal/Freigemeinnützig", "relevance": "Mittel",
+         "gnews": '"Zentralklinik Bad Berka" OR "ZKB" Thüringen Klinik'},
+    ],
+    "bayern": [
+        {"name": "LMU Klinikum München",         "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"LMU Klinikum" OR "Klinikum der Universität München"'},
+        {"name": "Klinikum rechts der Isar",     "category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Klinikum rechts der Isar" OR "MRI München"'},
+        {"name": "Universitätsklinikum Augsburg","category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Augsburg" OR "UKA Augsburg"'},
+        {"name": "Helios Amper-Klinikum Dachau", "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Helios Amper-Klinikum" OR "Helios" Dachau Krankenhaus'},
+        {"name": "Schön Klinik München",         "category": "Privater Konzern",     "relevance": "Mittel",
+         "gnews": '"Schön Klinik" München OR "Schön Klinik Harlaching"'},
+    ],
+    "bw": [
+        {"name": "Universitätsklinikum Freiburg","category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Freiburg" OR "UKF Freiburg"'},
+        {"name": "Universitätsklinikum Tübingen","category": "Universitätsklinikum", "relevance": "Hoch",
+         "gnews": '"Universitätsklinikum Tübingen" OR "UKT Tübingen"'},
+        {"name": "Robert-Bosch-Krankenhaus Stuttgart", "category": "Freigemeinnützig", "relevance": "Mittel",
+         "gnews": '"Robert-Bosch-Krankenhaus" OR "RBK Stuttgart"'},
+        {"name": "Klinikum Stuttgart",           "category": "Kommunal/Freigemeinnützig", "relevance": "Mittel",
+         "gnews": '"Klinikum Stuttgart" OR "Katharinenhospital Stuttgart"'},
+        {"name": "Vinzenz von Paul Kliniken",    "category": "Konfessionell",        "relevance": "Mittel",
+         "gnews": '"Vinzenz von Paul" OR "Vinzenz Kliniken" Baden-Württemberg'},
+    ],
+}
 
 # ── Hilfsfunktionen ───────────────────────────────────────────────────────────
 
@@ -182,7 +314,7 @@ def update_dashboard(items, path=INDEX_PATH):
     new_feeds = {it["feed"] for it in items}
     merged = [it for it in existing
               if isinstance(it, dict) and it.get("feed") not in new_feeds] + items
-    payload = json.dumps(merged, ensure_ascii=False)
+    payload = json.dumps(merged, ensure_ascii=False).replace('</script>', r'<\/script>')
     new_block = (
         "/* ===== ASKLEPIOS-FEED:START - taeglich von brief.py ersetzt ===== */\n"
         "  window.__ASK_FEED__ = " + payload + ";\n"
@@ -240,35 +372,132 @@ def get_briefing():
 
 def get_radar():
     """
-    Quoted-term-Suche in Google News stellt sicher, dass nur Artikel mit dem
-    Krankenhausnamen zurueckkommen. Kein sekundaerer Keyword-Filter noetig.
+    Quoted-term-Suche in Google News pro Bundesland/Region.
+    Jeder Treffer bekommt ein 'region'-Feld fuer den Dashboard-Filter.
     """
     result = []
-    for src in RADAR_SOURCES:
-        url   = _gnews_url(src["gnews"])
-        data  = _fetch(url)
-        items = _parse_feed(data)
-        time.sleep(1.0)
-        count = 0
-        for item in items:
+    for region, sources in RADAR_SOURCES_BY_REGION.items():
+        for src in sources:
+            url   = _gnews_url(src["gnews"])
+            data  = _fetch(url)
+            items = _parse_feed(data)
+            time.sleep(0.8)
+            count = 0
+            for item in items:
+                title = item["title"]
+                if " - " in title:
+                    title = title.rsplit(" - ", 1)[0].strip()
+                if not title:
+                    continue
+                result.append({
+                    "feed":      "radar",
+                    "source":    src["name"],
+                    "category":  src["category"],
+                    "title":     _clean(title),
+                    "url":       item["link"],
+                    "summary":   _clean(item["desc"]),
+                    "date":      _iso(_parse_date(item["pub"])),
+                    "relevance": src["relevance"],
+                    "region":    region,
+                })
+                count += 1
+                if count >= 2:
+                    break
+    return result
+
+
+# ── Stellen ───────────────────────────────────────────────────────────────────
+
+# Bundesland → Suchbegriffe fuer Google News
+REGION_LABELS = {
+    "hamburg":               "Hamburg",
+    "schleswig_holstein":    "Schleswig-Holstein",
+    "mecklenburg_vorpommern":"Mecklenburg-Vorpommern",
+    "berlin_brandenburg":    "Berlin OR Brandenburg",
+    "niedersachsen_bremen":  "Niedersachsen OR Bremen",
+    "nrw":                   "Nordrhein-Westfalen",
+    "hessen":                "Hessen",
+    "rheinland_pfalz":       "Rheinland-Pfalz",
+    "saarland":              "Saarland",
+    "sachsen":               "Sachsen",
+    "sachsen_anhalt":        "Sachsen-Anhalt",
+    "thueringen":            "Thüringen",
+    "bayern":                "Bayern",
+    "bw":                    "Baden-Württemberg",
+}
+
+STELLEN_BUNDESWEIT = [
+    {
+        "category": "GF/Management Asklepios",
+        "gnews": ('Asklepios (Geschäftsführer OR Geschäftsführerin OR Klinikdirektor'
+                  ' OR Klinikmanager OR Regionalleiter OR Regionalgeschäftsführer)'),
+    },
+    {
+        "category": "Chefarzt Asklepios",
+        "gnews": ('Asklepios (Chefarzt OR Chefärztin OR "Leitender Arzt"'
+                  ' OR "Leitende Ärztin" OR Klinikchef OR Klinikchefin)'),
+    },
+]
+
+
+def get_stellen():
+    """
+    Stellen-Feed:
+      – GF/Management Asklepios      → bundesweit (region='bundesweit')
+      – Chefarzt Asklepios           → bundesweit
+      – GF Gesundheitsunternehmen    → regionsgefiltert
+      – Kaufm. Leitung Asklepios     → regionsgefiltert
+    Nicht enthalten: Sekretariats- und Assistenzpositionen.
+    """
+    result = []
+    seen = set()
+
+    def _add(items_raw, category, region, source_label):
+        for item in items_raw:
             title = item["title"]
             if " - " in title:
                 title = title.rsplit(" - ", 1)[0].strip()
-            if not title:
+            title = _clean(title)
+            if not title or title in seen:
                 continue
+            # Sekretariat / Assistenz explizit ausschliessen
+            tl = title.lower()
+            if any(w in tl for w in ("sekretär", "sekretärin", "assistenz", "rezeption",
+                                     "empfang", "pflegeassist")):
+                continue
+            seen.add(title)
             result.append({
-                "feed":      "radar",
-                "source":    src["name"],
-                "category":  src["category"],
-                "title":     _clean(title),
-                "url":       item["link"],
-                "summary":   _clean(item["desc"]),
-                "date":      _iso(_parse_date(item["pub"])),
-                "relevance": src["relevance"],
+                "feed":     "stellen",
+                "source":   source_label,
+                "category": category,
+                "title":    title,
+                "url":      item["link"],
+                "summary":  _clean(item["desc"]),
+                "date":     _iso(_parse_date(item["pub"])),
+                "region":   region,
             })
-            count += 1
-            if count >= 3:
-                break
+
+    # ── Bundesweit: Asklepios GF + Chefarzt ──
+    for src in STELLEN_BUNDESWEIT:
+        data = _fetch(_gnews_url(src["gnews"], days=30))
+        _add(_parse_feed(data)[:4], src["category"], "bundesweit", "Google News")
+        time.sleep(0.8)
+
+    # ── Regional: GF Gesundheitsunternehmen + Kaufm. Leitung Asklepios ──
+    for region, label in REGION_LABELS.items():
+        gf_q = (f'({label}) (Krankenhaus OR Klinik OR Gesundheit)'
+                f' (Geschäftsführer OR Geschäftsführerin OR Klinikleitung)')
+        data = _fetch(_gnews_url(gf_q, days=30))
+        _add(_parse_feed(data)[:2], "GF Gesundheitsunternehmen", region, "Google News")
+        time.sleep(0.6)
+
+        kfm_q = (f'Asklepios ({label})'
+                 f' ("kaufmännische Leitung" OR "kaufmännischer Direktor"'
+                 f' OR "Verwaltungsleitung" OR "Koordinator" OR "Koordinatorin")')
+        data = _fetch(_gnews_url(kfm_q, days=30))
+        _add(_parse_feed(data)[:2], "Kaufm. Leitung Asklepios", region, "Google News")
+        time.sleep(0.6)
+
     return result
 
 
@@ -283,11 +512,11 @@ if __name__ == "__main__":
     radar = get_radar()
     print(f"  {len(radar)} Meldungen", flush=True)
 
-    # Stellen kommen vom lokalen scraper.py (Stellenmarktreport) per upload_to_github.py
-    # und werden hier nicht ueberschrieben (Merge-Logik in update_dashboard behaelt
-    # bestehende "stellen"-Eintraege solange dieser Lauf keine liefert).
+    print("Stellenmarkt ...", flush=True)
+    stellen = get_stellen()
+    print(f"  {len(stellen)} Meldungen", flush=True)
 
-    all_items = briefing + radar
+    all_items = briefing + stellen + radar
     if not all_items:
         print("WARNUNG: Keine Meldungen – index.html bleibt unveraendert.")
         raise SystemExit(1)
