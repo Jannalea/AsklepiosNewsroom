@@ -440,6 +440,23 @@ STELLEN_BUNDESWEIT = [
 ]
 
 
+_JOB_SIGNAL_RE = re.compile(
+    r"\((?:w/m/d|m/w/d|m/w/x|w/m/x|d/w/m|d/m/w|m/w/i|w/m/i)\)", re.I)
+_JOB_KEYWORDS = ("stellenausschreibung", "stellenangebot", "jobangebot",
+                  "wir suchen", "gesucht", "vakanz", "jetzt bewerben")
+
+
+def _looks_like_job_posting(title):
+    """Google News liefert zu den Suchbegriffen auch normale Nachrichtenartikel
+    (z.B. ein Chefarzt wird zitiert). Echte Stellenanzeigen tragen im Titel so
+    gut wie immer das AGG-Pflichtkürzel (w/m/d) o.ä. – das ist ein zuverlässiges
+    Signal, das in echten News-Schlagzeilen praktisch nie vorkommt."""
+    if _JOB_SIGNAL_RE.search(title):
+        return True
+    tl = title.lower()
+    return any(kw in tl for kw in _JOB_KEYWORDS)
+
+
 def get_stellen():
     """
     Stellen-Feed:
@@ -447,7 +464,8 @@ def get_stellen():
       – Chefarzt Asklepios           → bundesweit
       – GF Gesundheitsunternehmen    → regionsgefiltert
       – Kaufm. Leitung Asklepios     → regionsgefiltert
-    Nicht enthalten: Sekretariats- und Assistenzpositionen.
+    Nicht enthalten: Sekretariats- und Assistenzpositionen, reine News-Artikel
+    (nur echte Stellenanzeigen, erkennbar am (w/m/d)-Kürzel o.ä.).
     """
     result = []
     seen = set()
@@ -464,6 +482,9 @@ def get_stellen():
             tl = title.lower()
             if any(w in tl for w in ("sekretär", "sekretärin", "assistenz", "rezeption",
                                      "empfang", "pflegeassist")):
+                continue
+            # Nur echte Stellenanzeigen, keine reinen News-Erwähnungen
+            if not _looks_like_job_posting(title):
                 continue
             seen.add(title)
             result.append({
