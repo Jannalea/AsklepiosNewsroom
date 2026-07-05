@@ -440,17 +440,30 @@ STELLEN_BUNDESWEIT = [
 ]
 
 
+# Google News liefert zu reinen Keyword-Suchen ueberwiegend normale
+# Presseartikel zurueck (z.B. "Chefarzt XY uebernimmt Klinik"), keine echten
+# Stellenanzeigen. Einschraenkung auf bekannte Jobboersen holt echte Anzeigen.
+_JOBSITES = "(site:stepstone.de OR site:indeed.com OR site:experteer.de)"
+
 _JOB_SIGNAL_RE = re.compile(
     r"\((?:w/m/d|m/w/d|m/w/x|w/m/x|d/w/m|d/m/w|m/w/i|w/m/i)\)", re.I)
 _JOB_KEYWORDS = ("stellenausschreibung", "stellenangebot", "jobangebot",
                   "wir suchen", "gesucht", "vakanz", "jetzt bewerben")
 
+_GF_KEYWORDS = ("geschäftsführ", "klinikdirektor", "klinikmanag",
+                "regionalleit", "regionalgeschäftsführ", "klinikleitung")
+_CHEFARZT_KEYWORDS = ("chefarzt", "chefärztin", "leitender arzt",
+                      "leitende ärztin", "klinikchef")
+_KFM_KEYWORDS = ("kaufmännisch", "verwaltungsleit", "verwaltungsdirekt",
+                 "kfm. leitung", "kfm leitung")
+_AGGREGATOR_RE = re.compile(
+    r"\d+\s*jobs\b|jobs\s*(und|&)\s*stellenangebote", re.I)
+
 
 def _looks_like_job_posting(title):
-    """Google News liefert zu den Suchbegriffen auch normale Nachrichtenartikel
-    (z.B. ein Chefarzt wird zitiert). Echte Stellenanzeigen tragen im Titel so
-    gut wie immer das AGG-Pflichtkürzel (w/m/d) o.ä. – das ist ein zuverlässiges
-    Signal, das in echten News-Schlagzeilen praktisch nie vorkommt."""
+    """Echte Stellenanzeigen tragen im Titel so gut wie immer das
+    AGG-Pflichtkürzel (w/m/d) o.ä. – ein zuverlässiges Signal, das in
+    echten News-Schlagzeilen praktisch nie vorkommt."""
     if _JOB_SIGNAL_RE.search(title):
         return True
     tl = title.lower()
@@ -459,18 +472,22 @@ def _looks_like_job_posting(title):
 
 def get_stellen():
     """
-    Stellen-Feed:
-      – GF/Management Asklepios      → bundesweit (region='bundesweit')
-      – Chefarzt Asklepios           → bundesweit
-      – GF Gesundheitsunternehmen    → regionsgefiltert
-      – Kaufm. Leitung Asklepios     → regionsgefiltert
-    Nicht enthalten: Sekretariats- und Assistenzpositionen, reine News-Artikel
-    (nur echte Stellenanzeigen, erkennbar am (w/m/d)-Kürzel o.ä.).
+    Stellen-Feed – ausschliesslich echte, ueber Jobboersen (Stepstone/Indeed/
+    Experteer via Google News) gefundene Stellenanzeigen:
+      – GF/Management Asklepios      → bundesweit, nur wenn "Asklepios" im Titel
+      – Chefarzt Asklepios           → bundesweit, nur wenn "Asklepios" im Titel
+      – GF Gesundheitsunternehmen    → regionsgefiltert, beliebiger Traeger
+      – Kaufm. Leitung Asklepios     → regionsgefiltert, nur wenn "Asklepios" im Titel
+    Nicht enthalten: Sekretariats-/Assistenzpositionen, reine News-Artikel,
+    sowie (fuer die Asklepios-Kategorien) Anzeigen ohne "Asklepios" im Titel –
+    Google-News-Jobboersen-Eintraege nennen den Arbeitgeber sonst nicht
+    zuverlaessig, daher lieber wenige, aber sicher richtige Treffer.
     """
     result = []
     seen = set()
 
-    def _add(items_raw, category, region, source_label):
+    def _add(items_raw, category, region, source_label,
+             require_employer=False, require_any=None):
         for item in items_raw:
             title = item["title"]
             if " - " in title:
@@ -478,13 +495,22 @@ def get_stellen():
             title = _clean(title)
             if not title or title in seen:
                 continue
-            # Sekretariat / Assistenz explizit ausschliessen
             tl = title.lower()
+            # Sekretariat / Assistenz explizit ausschliessen
             if any(w in tl for w in ("sekretär", "sekretärin", "assistenz", "rezeption",
                                      "empfang", "pflegeassist")):
                 continue
+            # Jobboersen-Listenseiten ("40 Jobs & Stellenangebote ...") ausschliessen
+            if _AGGREGATOR_RE.search(tl):
+                continue
             # Nur echte Stellenanzeigen, keine reinen News-Erwähnungen
             if not _looks_like_job_posting(title):
+                continue
+            # Arbeitgeber muss im Titel stehen (bei Asklepios-Kategorien)
+            if require_employer and "asklepios" not in tl:
+                continue
+            # Positions-Art muss im Titel erkennbar sein
+            if require_any and not any(kw in tl for kw in require_any):
                 continue
             seen.add(title)
             result.append({
@@ -500,23 +526,28 @@ def get_stellen():
 
     # ── Bundesweit: Asklepios GF + Chefarzt ──
     for src in STELLEN_BUNDESWEIT:
-        data = _fetch(_gnews_url(src["gnews"], days=30))
-        _add(_parse_feed(data)[:4], src["category"], "bundesweit", "Google News")
+        q = f'{src["gnews"]} {_JOBSITES}'
+        data = _fetch(_gnews_url(q, days=30))
+        require_kw = _GF_KEYWORDS if "GF" in src["category"] else _CHEFARZT_KEYWORDS
+        _add(_parse_feed(data)[:25], src["category"], "bundesweit", "Google News",
+             require_employer=True, require_any=require_kw)
         time.sleep(0.8)
 
-    # ── Regional: GF Gesundheitsunternehmen + Kaufm. Leitung Asklepios ──
+    # ── Regional: GF Gesundheitsunternehmen (beliebiger Traeger) + Kaufm. Leitung Asklepios ──
     for region, label in REGION_LABELS.items():
         gf_q = (f'({label}) (Krankenhaus OR Klinik OR Gesundheit)'
-                f' (Geschäftsführer OR Geschäftsführerin OR Klinikleitung)')
+                f' (Geschäftsführer OR Geschäftsführerin OR Klinikleitung) {_JOBSITES}')
         data = _fetch(_gnews_url(gf_q, days=30))
-        _add(_parse_feed(data)[:2], "GF Gesundheitsunternehmen", region, "Google News")
+        _add(_parse_feed(data)[:15], "GF Gesundheitsunternehmen", region, "Google News",
+             require_any=_GF_KEYWORDS)
         time.sleep(0.6)
 
         kfm_q = (f'Asklepios ({label})'
                  f' ("kaufmännische Leitung" OR "kaufmännischer Direktor"'
-                 f' OR "Verwaltungsleitung" OR "Koordinator" OR "Koordinatorin")')
+                 f' OR "Verwaltungsleitung") {_JOBSITES}')
         data = _fetch(_gnews_url(kfm_q, days=30))
-        _add(_parse_feed(data)[:2], "Kaufm. Leitung Asklepios", region, "Google News")
+        _add(_parse_feed(data)[:15], "Kaufm. Leitung Asklepios", region, "Google News",
+             require_employer=True, require_any=_KFM_KEYWORDS)
         time.sleep(0.6)
 
     return result
