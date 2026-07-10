@@ -67,4 +67,6 @@ if __name__ == "__main__":
     try:
         upload()
     except Exception as e:
-        print(f"Upload fehlgeschlagen (kein Problem fuer lokalen Betrieb): {e}")
+        print(f"Upload fehlgeschlagen: {e}")
+        if os.environ.get("GITHUB_ACTIONS"):
+            raise SystemExit(1)
